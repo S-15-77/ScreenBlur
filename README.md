@@ -34,8 +34,8 @@
 Build from source:
 
 ```sh
-git clone <your-repo-url> macScreenBlur
-cd macScreenBlur
+git clone https://github.com/S-15-77/ScreenBlur.git
+cd ScreenBlur
 ./build.sh
 open ScreenBlur.app
 ```
@@ -107,9 +107,10 @@ The idle and lid features need no permissions.
 ## Project structure
 
 ```
-macScreenBlur/
+ScreenBlur/
 ├── main.swift   # entire app: triggers, sensors, overlays, settings UI
 ├── build.sh     # compile, package and sign ScreenBlur.app
+├── CLAUDE.md    # notes for AI coding assistants
 └── README.md
 ```
 
