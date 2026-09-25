@@ -23,10 +23,13 @@ Everything is in `main.swift`. Keep it a single file unless it gets much larger.
   - Lid: `LidSensor` → `lidAngleChanged` sets `lidSpring.target` → `frame(_:)` → `applyLid`.
   - Head: `CMHeadphoneMotionManager` → `headMoved` sets `headSpring.target` (signed: >0 blurs the right side) → `frame(_:)` → `applyHead`.
   - `frame(_:)` is one `CADisplayLink` callback on the built-in screen, in `.common` mode, that steps both springs.
-  - `makeWindow(frame:)` builds every overlay: a borderless, click-through window at `.screenSaver` level with a container view whose `subviews[0]` is the `NSVisualEffectView`.
+  - `makeWindow(on:)` builds every overlay: a borderless, click-through, non-activating panel bound to its screen at `.screenSaver` level with a container view whose `subviews[0]` is the `NSVisualEffectView`.
 - `Spring`: critically damped spring used for all sensor-driven motion.
 - `Live`: an `ObservableObject` holding readout strings for the UI.
 - `SettingsView`: the SwiftUI settings window.
+- `registerHotKey()`: global ⌃⌥⌘B → Blur Now via Carbon `RegisterEventHotKey` (no Accessibility permission).
+- Launch at login: `SMAppService.mainApp`, toggled in `SettingsView`. Its state comes from the system, not UserDefaults.
+- `icon.swift`: a separate build-time tool that `build.sh` compiles and runs to write `AppIcon.icns`. It is not part of the app.
 - `LidSensor`: reads the IOKit HID lid hinge sensor on a background queue and delivers angles on the main thread.
 
 ## Conventions and gotchas

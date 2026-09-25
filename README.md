@@ -15,7 +15,7 @@
 | **Idle** | After a set time with no keyboard or mouse input, every display fades into a frosted blur. Any input fades it back out. |
 | **Lid** | As you close a MacBook lid, the built-in screen blurs gradually, bottom first. When you open it, the blur clears from the top down. |
 | **AirPods head tracking** | Turn your head left and the right side blurs. Turn right and the left side blurs. The blur follows how far you turn and has a soft, feathered edge. |
-| **Blur Now** | Blur all screens on demand. |
+| **Blur Now** | Blur all screens on demand, from any app with **⌃⌥⌘B**. |
 
 - Native Swift, AppKit and SwiftUI. One source file, no dependencies.
 - Uses the system blur (`NSVisualEffectView`), so it matches the look of macOS.
@@ -52,6 +52,7 @@ All settings save instantly and persist across launches.
 
 | Section | Setting | Default |
 |---|---|---|
+| General | Launch at login | Off |
 | Idle | Blur when idle | On |
 | | Idle delay | 60 s (5 s – 10 min) |
 | Lid | Blur as the lid closes | On |
@@ -102,6 +103,8 @@ The idle and lid features need no permissions.
 | Head turn shows "Unsupported" | Your AirPods model does not report head motion. |
 | The wrong side blurs | Turn on **Swap sides**. |
 | Blur triggers while you're looking at the screen | Look at the screen and press **Recenter**. |
+| Launch at login won't stay on | Allow ScreenBlur in System Settings → General → Login Items. The login item points at the app's current location, so move it to `/Applications` first. |
+| ⌃⌥⌘B does nothing | Another app already owns that shortcut. |
 | Menu bar icon is missing | The notch may be hiding it. Use the Dock icon instead. |
 
 ## Project structure
@@ -109,6 +112,7 @@ The idle and lid features need no permissions.
 ```
 ScreenBlur/
 ├── main.swift   # entire app: triggers, sensors, overlays, settings UI
+├── icon.swift   # draws the app icon at build time
 ├── build.sh     # compile, package and sign ScreenBlur.app
 ├── CLAUDE.md    # notes for AI coding assistants
 └── README.md
@@ -116,9 +120,9 @@ ScreenBlur/
 
 ## Roadmap
 
-- [ ] Launch at login
-- [ ] Global hotkey for Blur Now
-- [ ] Custom app icon
+- [x] Launch at login
+- [x] Global hotkey for Blur Now
+- [x] Custom app icon
 - [ ] Signed and notarized release builds
 
 ## Contributing

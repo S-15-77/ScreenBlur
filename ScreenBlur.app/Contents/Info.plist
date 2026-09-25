@@ -3,6 +3,7 @@
 <plist version="1.0"><dict>
   <key>CFBundleExecutable</key><string>ScreenBlur</string>
   <key>CFBundleIdentifier</key><string>local.macscreenblur</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleName</key><string>ScreenBlur</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>NSMotionUsageDescription</key><string>Uses AirPods head tracking to blur the half of the screen you look away from.</string>

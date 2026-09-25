@@ -2,6 +2,8 @@ import AppKit
 import IOKit.hid
 import CoreMotion
 import SwiftUI
+import ServiceManagement
+import Carbon.HIToolbox
 
 // Blurs every screen after `idleSeconds` without keyboard/mouse input; any input fades it back out.
 // Also tracks the lid hinge: closing blurs the built-in screen bottom→up, opening clears it top→down.
@@ -37,7 +39,9 @@ final class App: NSObject, NSApplicationDelegate, CMHeadphoneMotionManagerDelega
         statusItem.button?.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: "Screen Blur")
         let menu = NSMenu()
         menu.addItem(withTitle: "Open ScreenBlur", action: #selector(openSettings), keyEquivalent: ",").target = self
-        menu.addItem(withTitle: "Blur Now", action: #selector(blurNow), keyEquivalent: "b").target = self
+        let blurItem = menu.addItem(withTitle: "Blur Now", action: #selector(blurNow), keyEquivalent: "b")
+        blurItem.target = self
+        blurItem.keyEquivalentModifierMask = [.control, .option, .command] // shows the global hotkey
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.menu = menu
@@ -48,6 +52,7 @@ final class App: NSObject, NSApplicationDelegate, CMHeadphoneMotionManagerDelega
         mainMenu.addItem(withTitle: "", action: nil, keyEquivalent: "").submenu = appMenu
         NSApp.mainMenu = mainMenu
         openSettings()
+        registerHotKey()
 
         // ponytail: 0.25s polling of the idle counter; no Accessibility permission needed, unlike event taps.
         Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in self?.tick() }
@@ -129,7 +134,7 @@ final class App: NSObject, NSApplicationDelegate, CMHeadphoneMotionManagerDelega
         let W = screen.frame.width, F = W * 0.3, bandW = W / 2 + F
         if headWindow?.frame != screen.frame {
             headWindow?.orderOut(nil)
-            let w = makeWindow(frame: screen.frame)
+            let w = makeWindow(on: screen)
             w.alphaValue = 1
             let band = w.contentView!.subviews[0]
             band.autoresizingMask = []
@@ -148,6 +153,19 @@ final class App: NSObject, NSApplicationDelegate, CMHeadphoneMotionManagerDelega
     }
 
     @objc func blurNow() { show() }
+
+    // ⌃⌥⌘B from any app. Carbon hotkeys need no Accessibility permission, unlike NSEvent global monitors.
+    // ponytail: fixed shortcut; add a recorder in settings if it clashes with something.
+    var hotKey: EventHotKeyRef?
+    func registerHotKey() {
+        var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
+            (NSApp.delegate as? App)?.blurNow() // delivered on the main thread
+            return noErr
+        }, 1, &spec, nil, nil)
+        RegisterEventHotKey(UInt32(kVK_ANSI_B), UInt32(controlKey | optionKey | cmdKey),
+                            EventHotKeyID(signature: 0x53424C52, id: 1), GetApplicationEventTarget(), 0, &hotKey)
+    }
 
     func tick() {
         let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
@@ -188,7 +206,7 @@ final class App: NSObject, NSApplicationDelegate, CMHeadphoneMotionManagerDelega
         let H = screen.frame.height
         if lidWindow?.frame != screen.frame {
             lidWindow?.orderOut(nil)
-            let w = makeWindow(frame: screen.frame)
+            let w = makeWindow(on: screen)
             let band = w.contentView!.subviews[0] as! NSVisualEffectView
             band.autoresizingMask = []
             band.frame.size = NSSize(width: screen.frame.width, height: 2 * H) // opaque bottom half, fade top half
@@ -233,7 +251,7 @@ final class App: NSObject, NSApplicationDelegate, CMHeadphoneMotionManagerDelega
         guard !blurred else { return }
         blurred = true
         shownAt = Date()
-        windows = NSScreen.screens.map { makeWindow(frame: $0.frame) } // rebuilt each time so display changes are picked up
+        windows = NSScreen.screens.map { makeWindow(on: $0) } // rebuilt each time so display changes are picked up
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.8
             ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
@@ -252,8 +270,13 @@ final class App: NSObject, NSApplicationDelegate, CMHeadphoneMotionManagerDelega
         }, completionHandler: { closing.forEach { $0.orderOut(nil) } })
     }
 
-    func makeWindow(frame: NSRect) -> NSWindow {
-        let w = NSWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
+    // Bound to `screen` explicitly so it lands on external displays, not just the main one. A non-activating
+    // panel (unlike a regular app's NSWindow) can also join another app's full-screen Space on that display.
+    func makeWindow(on screen: NSScreen) -> NSWindow {
+        let frame = screen.frame
+        let w = NSPanel(contentRect: NSRect(origin: .zero, size: frame.size), styleMask: [.borderless, .nonactivatingPanel],
+                        backing: .buffered, defer: false, screen: screen)
+        w.hidesOnDeactivate = false // panels hide when the app loses focus by default
         w.level = .screenSaver
         w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         w.isOpaque = false
@@ -302,13 +325,24 @@ struct SettingsView: View {
     @AppStorage("headEnabled") var headEnabled = true
     @AppStorage("headTurn") var headTurn = 25.0
     @AppStorage("headInvert") var headInvert = false
+    // Not a UserDefaults key: the system's login-item list is the source of truth.
+    @State var loginOn = SMAppService.mainApp.status == .enabled
 
     var body: some View {
         Form {
+            Section("General") {
+                Toggle("Launch at login", isOn: Binding(get: { loginOn }, set: { on in
+                    try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
+                    loginOn = SMAppService.mainApp.status == .enabled
+                }))
+                if SMAppService.mainApp.status == .requiresApproval {
+                    Text("Allow ScreenBlur in System Settings › General › Login Items").font(.caption)
+                }
+            }
             Section("Idle") {
                 Toggle("Blur when idle", isOn: $idleEnabled)
                 Slider(value: $idleSeconds, in: 5...600, step: 5) { Text("After \(Int(idleSeconds))s") }
-                Button("Blur Now") { app.blurNow() }
+                Button("Blur Now  ⌃⌥⌘B") { app.blurNow() }
             }
             Section("Lid") {
                 Toggle("Blur as the lid closes", isOn: $lidEnabled)
